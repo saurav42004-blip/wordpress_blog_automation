@@ -1,0 +1,520 @@
+{
+  "name": "RSS Global News",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        -16
+      ],
+      "id": "3ae97320-ca53-48b5-965a-9c40db507ebc",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  //{ \"json\": { \"feed\": \"https://timesofindia.indiatimes.com/rssfeeds/296589292.cms\" } },\n  //{ \"json\": { \"feed\": \"https://feeds.feedburner.com/ndtvnews-world-news\" } },\n  { \"json\": { \"feed\": \"http://feeds.bbci.co.uk/news/world/rss.xml\" } },\n  { \"json\": { \"feed\": \"https://blogs.fcdo.gov.uk/feed/\" } },\n  //{ \"json\": { \"feed\": \"https://www.diplomatie.gouv.fr/spip.php?page=backend&id_rubrique=53404/feed\" } },\n  { \"json\": { \"feed\": \"https://www.thenation.com/subject/foreign-policy/feed/\" } },\n  { \"json\": { \"feed\": \"https://saiia.org.za/thematic-area/foreign-policy/feed/\" } },\n  { \"json\": { \"feed\": \"https://www.foreignaffairs.com/rss.xml\" } },\n  { \"json\": { \"feed\": \"https://www.theguardian.com/politics/foreignpolicy/rss\" } }\n]\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        -16
+      ],
+      "id": "a09b26a9-7b2a-4657-897d-4ac17b800fc2",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        160,
+        -16
+      ],
+      "id": "4c1e5a67-004d-420e-8c92-4b057d0723a4",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "35eb4fa9-674a-46cf-bb05-4300588a266c",
+              "leftValue": "={{ $json[\"isoDate\"] }}",
+              "rightValue": "={{ DateTime.now().minus({ days: 1 }) }}\n",
+              "operator": {
+                "type": "dateTime",
+                "operation": "afterOrEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        528,
+        -16
+      ],
+      "id": "259b4303-e8c6-4178-8d7e-1f2fd7a22055",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.feed }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.1,
+      "position": [
+        528,
+        144
+      ],
+      "id": "c0f6f913-18e6-403f-9b78-db63a483cb82",
+      "name": "RSS Read"
+    },
+    {
+      "parameters": {
+        "jsCode": "const keywordString = \"US,Foreign,China,EU,Russia,Policy,Diplomacy,Deal,Trade,Tariff,meeting,BRICS,UN,War\";\nconst keywords = keywordString.split(\",\").map(k => k.trim().toLowerCase());\n\n// Step 1: Score each item\nconst scoredItems = items.map(item => {\n  const content = (item.json.content || \"\").toLowerCase();\n  const title = (item.json.title || \"\").toLowerCase();\n\n  let titleHits = 0;\n  let contentHits = 0;\n\n  for (const keyword of keywords) {\n    const titleMatch = (title.match(new RegExp(`\\\\b${keyword}\\\\b`, \"g\")) || []).length;\n    const contentMatch = (content.match(new RegExp(`\\\\b${keyword}\\\\b`, \"g\")) || []).length;\n\n    titleHits += titleMatch;\n    contentHits += contentMatch;\n  }\n\n  const relevanceScore = titleHits * 2 + contentHits;\n\n  return {\n    json: {\n      ...item.json,\n      titleHits,\n      contentHits,\n      relevanceScore\n    }\n  };\n});\n\n// Step 2: Sort by relevanceScore descending\nconst sorted = scoredItems.sort((a, b) => b.json.relevanceScore - a.json.relevanceScore);\n\n// Step 3: Return top 5\nreturn sorted.slice(0, 1);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        -48
+      ],
+      "id": "92b6b5bd-db27-4fca-9f6e-34f95b714756",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Code1').item.json.link }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1024,
+        -48
+      ],
+      "id": "c4ca03fd-07c5-4c72-9680-cee58a33f7c6",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map((item, index) => {\n  const html = item.json.data || \"\";\n\n  // Step 1: Clean noisy tags\n  let cleanHtml = html\n    .replace(/<script[\\s\\S]*?<\\/script>/gi, '')\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n    .replace(/<nav[\\s\\S]*?<\\/nav>/gi, '')\n    .replace(/<footer[\\s\\S]*?<\\/footer>/gi, '')\n    .replace(/<aside[\\s\\S]*?<\\/aside>/gi, '')\n    .replace(/<header[\\s\\S]*?<\\/header>/gi, '')\n    .replace(/<noscript[\\s\\S]*?<\\/noscript>/gi, '');\n\n  // Step 2: Try to extract content from <article> or common classes\n  let match = cleanHtml.match(/<article[\\s\\S]*?<\\/article>/i);\n\n  if (!match) {\n    match = cleanHtml.match(/<div[^>]*class=\"[^\"]*(article-body|content|main-content)[^\"]*\"[^>]*>([\\s\\S]*?)<\\/div>/i);\n  }\n\n  const articleHtml = match ? match[0] : cleanHtml;\n\n  // Step 3: Strip all remaining tags\n  const plainText = articleHtml\n    .replace(/<[^>]+>/g, '')      // Remove all tags\n    .replace(/\\s{2,}/g, ' ')      // Collapse whitespace\n    .trim();\n\n  // Step 4: Fetch corresponding metadata from another node (Code1)\n  const meta = $items('Code1', 0)[index].json;\n\n  return {\n    json: {\n      title: meta.title || '',\n      link: meta.link || '',\n      pubDate: meta.pubDate || '',\n      content: plainText\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        208
+      ],
+      "id": "4a45db55-3274-4693-831b-bb6eafef6863",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a professional journalist with expertise in international affairs, geopolitics, and diplomacy. Based on the news article provided below, rewrite it as a tailored WordPress SEO_OPTIMIZED blog post. Your version should be HUMAN-WRITTEN, ENGAGING, AND FACTUALLY ACCURATE, targeted toward global readers who follow major world developments.\n\nYour goal is to PARAPHRASE THE ORIGINAL ARTICLE COMPLETELY, preserving its key facts while improving readability, structure, and value. You may add brief, factual CONTEXTUAL INSIGHTS (e.g., past events, political background, or positions of global actors) where helpful — but DO NOT SPECULATE OR EDITORIALIZE.\n\n---\n**WRITING STYLE**\n- Tone: Clear, factual, informative, and slightly conversational.\n- Format: Web-friendly, paragraph-based, easy to read, SEO-Optimized.\n- Avoid repetition or filler language.\n- Do not use words like “context,” “look forward,” “in this article,” etc.\n\n---\n**HTML STRUCTURE**\nWrap the content using these HTML tags:\n\n- Title (SEO-optimized, < 60 characters): `<title> ... </title>`\n- Enclose the whole content (not title) inside: `<content> ... </content>`\n- Paragraphs: Use `<p>` tags\n- Use `<br>` tags only when separating short ideas or transitions.\n- If relevant, include one **meaningful subheading** in `<h2>` (max 1).\n\n---\n**TAGS GENERATION**\nAt the end, generate a list of 4 to 7 SEO-optimized, relevant tags for the article. These should be:\n- Short (one to two words only)\n- Comma-separated (e.g., geopolitics, US-China trade, BRICS, tariffs)\n- Focused on topics, countries, and entities mentioned\nWrap the tags inside: `<tags> ... </tags>`\n\nExample: `<tags>US tariffs, BRICS, Donald Trump, global trade, WTO, US dollar</tags>`\n\n---\n**IMAGE GENERATION PROMPT**\n-After tags, add the image prompt enclosed in <image>...</image>.\n- A concise, vivid description for generating a single poster‑style image like we generally come across that visually summarizes the article. Follow these guidelines:\n\n-Focus Elements\n-Country‑specific piece ➜ National flag with correct colors(NO Portrait of Leaders).\n-Conflict/war piece ➜ Leaders or military symbols of the parties, subtle war motif (e.g., split background, smoke overlay).\n-Multilateral diplomacy ➜ Officials shaking hands, UN backdrop, overlapping flags.\n-If it includes some leaders depict them in the image.\n\n-Style Cues\n-Photorealistic or high‑quality digital illustration.\n-Balanced, news‑poster composition, neutral color palette.\n-NO TEXT IN IMAGE.\n\n-Do Not Include\n-Brand watermarks, sensational gore, or speculative imagery.\n\n-Example output:\n-<image>Photorealistic poster of President Smith and Chancellor Ruiz shaking hands before overlapping US and EU flags, subtle conference backdrop, soft spotlight, neutral tones.</image>\n\n---\n**ENGAGEMENT**\n- End the post with a soft rhetorical thought or reflective statement to prompt reader interest.  \n  _(e.g., “What this means for regional stability remains to be seen.”)_\n\n---\nNow rewrite the article:\n\n##Previous Title##  \n{{ $json.title }}\n\n##Original Article##  \n{{ $json.content }}\n",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -240,
+        464
+      ],
+      "id": "485c1325-18c2-4ba2-8b89-2e761a7496f0",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -240,
+        624
+      ],
+      "id": "8bd604e7-72a2-4b0c-bd8c-483e464c3efb",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "uw1nidqHVso2g1Kb",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const categoryId = [3];\n\nreturn items.map(item => {\n  const htmlText = item.json.text || \"\";\n\n  // Extract the title\n  const titleMatch = htmlText.match(/<title>(.*?)<\\/title>/s);\n  const title = titleMatch ? titleMatch[1].trim() : \"Untitled Article\";\n\n  // Extract content\n  const contentMatch = htmlText.match(/<content>([\\s\\S]*?)<\\/content>/);\n  const content = contentMatch ? contentMatch[1].trim() : \"\";\n\n  // Extract tags\n  const tagsMatch = htmlText.match(/<tags>(.*?)<\\/tags>/s);\n  const rawTags = tagsMatch ? tagsMatch[1].trim() : \"\";\n  const tagList = rawTags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);\n\n  // Extract image prompt\n  const imageMatch = htmlText.match(/<image>([\\s\\S]*?)<\\/image>/i);\n  const imagePrompt = imageMatch ? imageMatch[1].trim() : \"\";\n\n  return {\n    json: {\n      title,\n      content,\n      category: categoryId,\n      //tags: tagList,\n      imagePrompt\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        464
+      ],
+      "id": "340fdb24-bcda-472d-9b16-55bf6ed60673",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "title": "={{ $('Code4').item.json.title }}",
+        "additionalFields": {
+          "content": "=<p style=\"text-align: center;\">\n  <img src=\"{{ $json.guid.rendered }}\" \n       alt=\"Auto-uploaded image\" \n       style=\"width:100%; max-width:600px; display: inline-block;\">\n</p>\n\n\n\n{{ $('Code4').item.json.content }}",
+          "status": "publish",
+          "categories": "={{ $('Code4').item.json.category }}"
+        }
+      },
+      "type": "n8n-nodes-base.wordpress",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        464
+      ],
+      "id": "468be32e-d969-44ff-8eb2-ed2901c171ec",
+      "name": "Wordpress",
+      "credentials": {
+        "wordpressApi": {
+          "id": "eyuXk2MUE9ws5xH7",
+          "name": "Wordpress account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.together.xyz/v1/images/generations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 363bf580d524682c3337e24036008f47dfc50990bacb7b1e478d6128ad345dc2"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n    \"model\": \"black-forest-labs/FLUX.1-schnell-Free\",\n    \"prompt\": \"{{ $json.imagePrompt }}\",\n  \"width\": 1024,\n  \"height\": 512,\n    \"steps\": 4,\n    \"n\": 1\n   }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        464
+      ],
+      "id": "db91381c-a99b-4a84-a4be-c92d4afceb2c",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.data[0].url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        528,
+        464
+      ],
+      "id": "0e6cdf25-47c6-4a13-a34f-9d5588d65f80",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://autoblog.amartglobal.in/wp-json/wp/v2/media",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wordpressApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Disposition",
+              "value": "=attachment; filename={{ $json.fileName }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "={{ $json.mimeType }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        928,
+        464
+      ],
+      "id": "7cf4950e-28a2-4e36-84a4-ec47775bb15c",
+      "name": "HTTP Request3",
+      "credentials": {
+        "wordpressApi": {
+          "id": "eyuXk2MUE9ws5xH7",
+          "name": "Wordpress account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  return {\n    json: {\n      fileName: item.binary.data.fileName,\n      mimeType: item.binary.data.mimeType\n    },\n    binary: {\n      data: item.binary.data\n    }\n  };\n});\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        464
+      ],
+      "id": "cc93cdf6-f0fd-4554-8fa3-cdedff4fded1",
+      "name": "Code5"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 10,
+              "triggerAtMinute": 5
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -240,
+        160
+      ],
+      "id": "b6843778-3792-4f72-9302-3f42a4374330",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "RSS Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "Wordpress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code5": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "b6c3cdce-55b7-4405-8ea0-0c1a7a52bfa6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f14d3f6aadafb81a1b082b9abf757f71dd698f6c95bf99d6400d479fc40bb519"
+  },
+  "id": "JxOmjFPMCQNA4bAG",
+  "tags": []
+}
