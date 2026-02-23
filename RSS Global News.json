@@ -212,7 +212,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer 363bf580d524682c3337e24036008f47dfc50990bacb7b1e478d6128ad345dc2"
+              "value": "Bearer <api_key>"
             }
           ]
         },
